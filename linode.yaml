@@ -1,0 +1,61 @@
+#cloud-config
+packages:
+  - curl
+  - wget
+  - nodejs
+  - npm
+  - nvtop
+  - software-properties-common
+  - nvidia-driver-535
+
+write_files:
+  - path: /usr/local/bin/ollama-setup.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      /usr/local/bin/ollama pull qwen2.5-coder:14b
+      /usr/local/bin/ollama create qwen2.5-coder14b-32K -f /root/modelfile
+      service bolt restart
+
+  - path: /etc/systemd/system/bolt.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Bolt Service
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/opt/bolt
+      ExecStart=/usr/local/bin/pnpm run dev --host
+      Environment=PATH=/usr/local/bin:/usr/bin:/bin
+      Restart=always
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /root/modelfile
+    owner: root:root
+    permissions: '0644'
+    content: |
+      FROM qwen2.5-coder:14b
+      PARAMETER num_ctx 32000
+
+runcmd:
+  - wget https://github.com/stackblitz-labs/bolt.diy/archive/refs/tags/v0.0.6.tar.gz -O /tmp/bolt.tar.gz
+  - mkdir -p /opt/bolt
+  - tar -xzvf /tmp/bolt.tar.gz -C /opt/bolt --strip-components=1
+  - curl -fsSL https://ollama.com/install.sh | sh
+  - npm install -g pnpm
+  - cd /opt/bolt && pnpm install
+  - mv /opt/bolt/.env.example /opt/bolt/.env
+  - sed -i 's|^OLLAMA_API_BASE_URL=.*|OLLAMA_API_BASE_URL=http://127.0.0.1:11434|' /opt/bolt/.env
+  - sed -i 's|^DEFAULT_NUM_CTX=.*|DEFAULT_NUM_CTX=32000|' /opt/bolt/.env
+  - systemctl daemon-reload
+  - systemctl enable bolt.service
+  - systemctl enable ollama.service
+  - systemctl start ollama.service  
+  - systemctl start bolt.service
+  - reboot
