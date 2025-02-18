@@ -9,6 +9,7 @@ variable "primary_region" {
   type = string
 }
 
+#Your IP address goes here
 variable "ip_address" {
   default = "1.2.3.4/32"
   type = string
